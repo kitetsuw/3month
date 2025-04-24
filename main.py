@@ -12,16 +12,23 @@ def main(page: ft.Page):
 
     task_list = ft.Column(spacing=10)
 
+    filter_type = 'all'
+
 
     def load_tasks():
         task_list.controls.clear()
-        for task_id, task_text in main_db.get_tasks():
-            task_list.controls.append(create_task_row(task_id, task_text))
+        for task_id, task_text, completed in main_db.get_tasks(filter_type):
+            task_list.controls.append(create_task_row(task_id, task_text, completed))
 
         page.update()
 
-    def create_task_row(task_id, task_text):
+    def create_task_row(task_id, task_text, completed):
         task_field = ft.TextField(value=task_text, expand=True, read_only=True)
+
+        task_checbox = ft.Checkbox(
+            value=bool(completed),
+            on_change=lambda e: toggle_task(task_id, e.control.value)
+        )
 
         def enable_edit(e):
             task_field.read_only = False
@@ -32,6 +39,7 @@ def main(page: ft.Page):
             page.update()
 
         return ft.Row([
+            task_checbox,
             task_field,
             ft.IconButton(ft.icons.EDIT, icon_color=ft.colors.YELLOW_400, on_click=enable_edit),
             ft.IconButton(ft.icons.SAVE, icon_color=ft.colors.GREEN_400, on_click=save_edit),
@@ -41,17 +49,34 @@ def main(page: ft.Page):
     def add_task(e):
         if task_input.value:
             task_id = main_db.add_task_db(task_input.value)
-            task_list.controls.append(create_task_row(task_id, task_input.value))
+            task_list.controls.append(create_task_row(task_id, task_input.value, None))
             task_input.value = ""
             page.update()
+
+    def toggle_task(task_id, is_completed):
+        main_db.update_task_db(task_id, completed=int(is_completed))
+        load_tasks()
 
     def delete_task(task_id):
         main_db.delete_task_db(task_id)
         load_tasks()
 
+    def set_filter(filter_value):
+        nonlocal filter_type
+        filter_type = filter_value
+        load_tasks()
+
+
+
     task_input = ft.TextField(hint_text="Добавьте задачу", expand=True, dense=True, on_submit=add_task)
 
     add_button = ft.ElevatedButton("Добавить", on_click=add_task, icon=ft.icons.ADD, icon_color=ft.colors.GREEN_400)
+
+    filter_button = ft.Row([
+        ft.ElevatedButton('Всё', on_click=lambda e: set_filter('all')),
+        ft.ElevatedButton('Выполненные', on_click=lambda e: set_filter('completed')),
+        ft.ElevatedButton('Невыполненные', on_click=lambda e: set_filter('uncompleted'))
+    ], alignment=ft.MainAxisAlignment.CENTER)
 
     # page.add(
     #     ft.Column([
@@ -62,6 +87,7 @@ def main(page: ft.Page):
 
     content = ft.Container(content = ft.Column([
         ft.Row([task_input, add_button], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+        filter_button,
         task_list
     ], alignment=ft.MainAxisAlignment.CENTER),
     padding=20, alignment=ft.alignment.center)
