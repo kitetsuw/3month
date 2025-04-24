@@ -1,91 +1,91 @@
 import flet as ft 
+from db import main_db
+
 
 def main(page: ft.Page):
-    page.title = "Моё первое приложение"
-    page.theme_mode = ft.ThemeMode.LIGHT
-    greeting_text = ft.Text("Hello world!")
-
-    HISTORY_FILE = "history.txt"
-
-    greeting_history = []
-
-    def load_history():
-        try:
-            with open(HISTORY_FILE, 'r', encoding='utf-8') as file:
-                lines = file.readlines()
-                for line in lines:
-                    name = line.strip()
-                    if name:
-                        greeting_history.append(name)
-                history_text.value = 'История приветствий:\n' + "\n".join(greeting_history)
-                page.updata()
-
-        except FileNotFoundError:
-            pass
-
-        def save_history():
-            with open(HISTORY_FILE, 'w', encoding='utf-8') as file:
-                for name in greeting_history:
-                    file.write(name + "\n")
-
-
-
-    history_text = ft.Text("История приветствий:", size="bodyMedium")
-
-
-
-    def on_button_click(_):
-        name = name_input.value.strip()
-
-        if name:
-            greeting_text.value = f"Привет, {name}!"
-            greet_button.text = "Поздороваться снова"
-            name_input.value = ""
-
-            greeting_history.append(name)
-            history_text.value = "История приветсвий:\n" + "\n".join(greeting_history)
-        else:
-            greeting_text.value = 'Пожалуйста, введите имя ❌'
-            
-        page.update()
-
-
-    name_input = ft.TextField(label="Введите имя", autofocus=True,
-                                on_submit=on_button_click)
-
-    def clear_history(_):
-        greeting_history.clear()
-        history_text.value = "История приветствий:"
-        page.update()
-
-    def toggle_theme(_):
-        if page.theme_mode == ft.ThemeMode.LIGHT:
-            page.theme_mode = ft.ThemeMode.DARK
-        else:
-            page.theme_mode = ft.ThemeMode.LIGHT
-        
-        page.update()
-
-    theme_button = ft.IconButton(icon=ft.icons.BRIGHTNESS_6, 
-                                 tooltip='Сменить тему',
-                                 on_click=toggle_theme)
-
-    greet_button = ft.ElevatedButton('Поздороваться', 
-                                    on_click=on_button_click,
-                                    icon=ft.icons.HANDSHAKE)
+    page.title = 'ToDo List'
+    # page.padding = 40
+    # page.bg_color = ft.colors.GREY_600
+    page.theme_mode = ft.ThemeMode.DARK
+    page.window_maximized = True
     
-    clear_button = ft.TextButton("Очистить исорию", on_click=clear_history)
 
-    clear_button_2 = ft.IconButton(icon=ft.icons.DELETE,
-                                    tooltip='Очистить историю',
-                                    on_click=clear_history)
+    task_list = ft.Column(spacing=10)
 
-    load_history()
-    # page.add(theme_button, greeting_text, name_input, greet_button, history_text, clear_button)
-    page.add(ft.Row([theme_button, clear_button, clear_button_2],  alignment=ft.MainAxisAlignment.CENTER),
-                    greeting_text,
-                    name_input,
-                    greet_button,
-                    history_text)
 
-ft.app(main, view= ft.AppView.WEB_BROWSER)
+    def load_tasks():
+        task_list.controls.clear()
+        for task_id, task_text in main_db.get_tasks():
+            task_list.controls.append(create_task_row(task_id, task_text))
+
+        page.update()
+
+    def create_task_row(task_id, task_text):
+        task_field = ft.TextField(value=task_text, expand=True, read_only=True)
+
+        def enable_edit(e):
+            task_field.read_only = False
+            task_field.update()
+
+        def save_edit(e):
+            main_db.update_task_db(task_id, task_field.value)
+            page.update()
+
+        return ft.Row([
+            task_field,
+            ft.IconButton(ft.icons.EDIT, icon_color=ft.colors.YELLOW_400, on_click=enable_edit),
+            ft.IconButton(ft.icons.SAVE, icon_color=ft.colors.GREEN_400, on_click=save_edit),
+            ft.IconButton(ft.icons.DELETE, icon_color=ft.colors.RED_400, on_click=lambda e: delete_task(task_id))
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+
+    def add_task(e):
+        if task_input.value:
+            task_id = main_db.add_task_db(task_input.value)
+            task_list.controls.append(create_task_row(task_id, task_input.value))
+            task_input.value = ""
+            page.update()
+
+    def delete_task(task_id):
+        main_db.delete_task_db(task_id)
+        load_tasks()
+
+    task_input = ft.TextField(hint_text="Добавьте задачу", expand=True, dense=True, on_submit=add_task)
+
+    add_button = ft.ElevatedButton("Добавить", on_click=add_task, icon=ft.icons.ADD, icon_color=ft.colors.GREEN_400)
+
+    # page.add(
+    #     ft.Column([
+    #         ft.Row([task_input, add_button], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+    #         task_list
+    #     ])
+    # )
+
+    content = ft.Container(content = ft.Column([
+        ft.Row([task_input, add_button], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+        task_list
+    ], alignment=ft.MainAxisAlignment.CENTER),
+    padding=20, alignment=ft.alignment.center)
+
+    background_image = ft.Image(
+        src='/Users/kurmanbek/Desktop/Geeks/Groups_flet/group_52_2_to_do_list/image.png',
+        fit=ft.ImageFit.FILL,
+        width=page.width,
+        height=page.height
+    )
+
+    background = ft.Stack([background_image, content])
+
+    def on_resize(e):
+        background_image.width = page.width
+        background_image.height = page.height
+        background.update()
+
+    page.add(background)
+    page.on_resize = on_resize
+
+    load_tasks()
+
+
+if __name__ == "__main__":
+    main_db.init_db()
+    ft.app(target=main)
